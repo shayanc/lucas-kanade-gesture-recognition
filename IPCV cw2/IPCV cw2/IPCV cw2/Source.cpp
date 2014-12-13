@@ -8,7 +8,7 @@
 using namespace std;
 using namespace cv;
 
-const int REGION_SIZE = 10;
+const int REGION_SIZE = 15;
 
 
 void calc_derivatives(Mat currFrame, Mat prevFrame, Mat &dx, Mat &dy, Mat &dt)
@@ -98,9 +98,9 @@ void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> veloc
 		//velocity is atleast 4 either way, bigger the value more confident we are,
 		if (abs(Vx) > 8 && abs(Vx) / abs(Vy) > 1)  {
 			if (Vx > 0 ) 
-				rectangle(motionToRight, Rect(positions.at(i).x, positions.at(i).y, REGION_SIZE*3, REGION_SIZE*3), Scalar(255), CV_FILLED);
+				rectangle(motionToRight, Rect(positions.at(i).x, positions.at(i).y, REGION_SIZE*5, REGION_SIZE*5), Scalar(255), CV_FILLED);
 			else
-				rectangle(motionToLeft, Rect(positions.at(i).x, positions.at(i).y, REGION_SIZE*3, REGION_SIZE*3), Scalar(255), CV_FILLED);
+				rectangle(motionToLeft, Rect(positions.at(i).x, positions.at(i).y, REGION_SIZE*5, REGION_SIZE*5), Scalar(255), CV_FILLED);
 		}
 		
 			
@@ -188,8 +188,8 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 			Point centre, vector, start;
 			centre.x = x+midshift;
 			centre.y = y+midshift;
-			vector.x = centre.x + (Vx > REGION_SIZE ? REGION_SIZE : Vx);
-			vector.y = centre.y + (Vy > REGION_SIZE ? REGION_SIZE : Vy);
+			vector.x = centre.x + (Vx > REGION_SIZE*3 ? REGION_SIZE*3 : Vx);
+			vector.y = centre.y + (Vy > REGION_SIZE*3 ? REGION_SIZE*3 : Vy);
 			start.x = x;
 			start.y = y;
 
@@ -199,8 +199,9 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 			double magnitude = sqrt(Vx*Vx + Vy*Vy);
 
 			//only add usefull vectors
-			if (magnitude > 4) 	{
+			if (magnitude > 2) 	{
 				line(frame, centre, vector, Scalar(0, 255, 255), 1, CV_AA);
+				circle(frame, vector, 1, Scalar(255, 0, 0), 2);
 				positions.push_back(start);
 				velocities.push_back(vel);
 			}
@@ -234,7 +235,7 @@ int main(int argc, const char** argv)
 	//RUN LOOP
 	for (;;) {
 
-		//~30fps
+		//~60fps
 		waitKey(16);
 		//get frame from video capture
 		cap >> currentFrame;
