@@ -15,6 +15,9 @@ int MAGNITUDE_FILTER = 5;		//vectors > mag_filter are used to process left and r
 int RECT_SIZE = REGION_SIZE * 5;
 int XY_RATIO = 1;
 int XY_SPLIT = 8;
+int timedown = 0;
+int vectormult = 1;
+
 
 
 
@@ -73,20 +76,24 @@ void createTrackbars(){
 	sprintf(name, "XY_SPLIT", XY_SPLIT);
 	sprintf(name, "XY_RATIO", XY_RATIO);
 	sprintf(name, "RectSize", RECT_SIZE);
-
+	sprintf(name, "vectormult", vectormult);
 
 	createTrackbar("region_size", "bar", &REGION_SIZE, 50, on_trackbar);
 	createTrackbar("magnitude filte", "bar", &MAGNITUDE_FILTER, 30, on_trackbar);
 	createTrackbar("XY_SPLIT", "bar", &XY_SPLIT, 100, on_trackbar);
 	createTrackbar("XY_RATIO", "bar", &XY_RATIO, 10, on_trackbar);
-	createTrackbar("RECT_SIZE filte", "bar", &RECT_SIZE, REGION_SIZE*100, on_trackbar);
+	createTrackbar("RECT_SIZE", "bar", &RECT_SIZE, REGION_SIZE*100, on_trackbar);
+	createTrackbar("vectorsize", "bar", &vectormult, 15, on_trackbar);
+
 }
 
-void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> velocities)
+void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> velocities, Mat &frame)
 {
 	Mat_<double> x_component(row, col, 0.5);
 	Mat_<unsigned char> motionToLeft(row, col, UCHAR_MAX + 1);
 	Mat_<unsigned char> motionToRight(row, col, UCHAR_MAX + 1);
+	Mat_<unsigned char> motionDirection(row, col, UCHAR_MAX + 1);
+
 	
 
 	cout << velocities.size() << endl;
@@ -111,21 +118,24 @@ void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> veloc
 		
 			
 	}
-	/*
-	if (abs(sumX)>4 && abs(sumX)/abs(sumY)>5){
-		if (sumX>0)
-			rectangle(motionToRight, Rect(0, 0, col, row), Scalar(255), CV_FILLED);
-		else
-			rectangle(motionToLeft, Rect(0, 0, col, row), Scalar(255), CV_FILLED);
 
+	if (abs(sumX)>XY_SPLIT && abs(sumX) / abs(sumY) >XY_RATIO){
+		if (sumX > 0) //right
+			rectangle(motionDirection, Rect(col / 2, 0, col, row), Scalar(255), CV_FILLED);
+		else  //left
+			rectangle(motionDirection, Rect(0, 0, col / 2, row), Scalar(255), CV_FILLED);
 	}
-	*/
-		
-	//blur(motionToLeft, motionToLeft, Size(10,10));
+	else if (abs(sumY) > XY_SPLIT && abs(sumY) / abs(sumX) > XY_RATIO) {
+		if (sumY<0) //top
+			rectangle(motionDirection, Rect(0, 0, col, row / 2), Scalar(255), CV_FILLED);
+		else
+			rectangle(motionDirection, Rect(0, row / 2, col, row), Scalar(255), CV_FILLED);
+	}
 
-
-	//blur(motionToRight, motionToRight, Size(10,10));
-
+	if (timedown == 0) {
+		imshow("Motion Directiobn", motionDirection);
+		timedown = 150;
+	}
 	imshow("left", motionToLeft);
 	imshow("right", motionToRight);
 }
@@ -193,8 +203,8 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 			Point centre, vector, start;
 			centre.x = x+midshift;
 			centre.y = y+midshift;
-			vector.x = centre.x + (abs(Vx) > REGION_SIZE ? REGION_SIZE : Vx);
-			vector.y = centre.y + (abs(Vy) > REGION_SIZE ? REGION_SIZE : Vy);
+			vector.x = centre.x + (abs(Vx) > REGION_SIZE ? REGION_SIZE * vectormult : Vx * vectormult);
+			vector.y = centre.y + (abs(Vy) > REGION_SIZE ? REGION_SIZE * vectormult : Vy * vectormult);
 			start.x = x;
 			start.y = y;
 
@@ -210,7 +220,7 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 		}
 	}
 
-	displayLRX(frame.rows, frame.cols, positions, velocities);
+	displayLRX(frame.rows, frame.cols, positions, velocities, frame);
 }
 
 
@@ -237,6 +247,11 @@ int main(int argc, const char** argv)
 		waitKey(16);
 		//get frame from video capture
 		cap >> currentFrame;
+		if (timedown > 0) {
+			timedown -= 16;
+			if (timedown < 0)
+				timedown = 0;
+		}
 		if (!currentFrame.data) {
 			printf("Error: no frame data.\n");
 			break;
