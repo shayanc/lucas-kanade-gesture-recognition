@@ -8,63 +8,50 @@
 using namespace std;
 using namespace cv;
 
-const int REGION_SIZE = 15;
+int REGION_SIZE = 15;
+int MAGNITUDE_FILTER = 5;		//vectors > mag_filter are used to process left and right
+
+
+int RECT_SIZE = REGION_SIZE * 5;
+int XY_RATIO = 1;
+int XY_SPLIT = 8;
+
 
 
 void calc_derivatives(Mat currFrame, Mat prevFrame, Mat &dx, Mat &dy, Mat &dt)
 {
-	//derivatives of current frame
-	Mat dx_cf, dy_cf;
-	//derivatives of previous frame
-	Mat dx_pf, dy_pf;
-
 	dx.create(currFrame.rows - 1, currFrame.cols - 1, CV_64F);
 	dy.create(currFrame.rows - 1, currFrame.cols - 1, CV_64F);
 	dt.create(currFrame.rows - 1, currFrame.cols - 1, CV_64F);
 
-
-	//time derivative
-	//dt = prevFrame - currFrame;
-
-
-
 	//CALC DERIVATIES
-
 	for (int i = 0; i < currFrame.rows - 1; i++) {
-
 		for (int j = 0; j < currFrame.cols - 1; j++) {
 			double a, b, c, d;
-
-			// Get dx gradient by calculating difference between two adjacent points
-			// in both currFrames
+			// Get dx gradient by calculating difference between frames
 			a = currFrame.at<uchar>(i, j + 1) - currFrame.at<uchar>(i, j);
 			b = currFrame.at<uchar>(i + 1, j + 1) - currFrame.at<uchar>(i + 1, j);
 			c = prevFrame.at<uchar>(i, j + 1) - prevFrame.at<uchar>(i, j);
 			d = prevFrame.at<uchar>(i + 1, j + 1) - prevFrame.at<uchar>(i + 1, j);
 			dx.at<double>(i, j) = (a + b + c + d) / 4;
 
-			// Get dy gradient by calculating difference between two adjacent points
-			// in both currFrames
+			// Get dy gradient by calculating difference between frames
 			a = currFrame.at<uchar>(i + 1, j) - currFrame.at<uchar>(i, j);
 			b = currFrame.at<uchar>(i + 1, j + 1) - currFrame.at<uchar>(i, j + 1);
 			c = prevFrame.at<uchar>(i + 1, j) - prevFrame.at<uchar>(i, j);
 			d = prevFrame.at<uchar>(i + 1, j + 1) - prevFrame.at<uchar>(i, j + 1);
 			dy.at<double>(i, j) = (a + b + c + d) / 4;
 
-
 			a = prevFrame.at<uchar>(i, j) - currFrame.at<uchar>(i, j);
 			b = prevFrame.at<uchar>(i + 1, j) - currFrame.at<uchar>(i + 1, j);
 			c = prevFrame.at<uchar>(i, j + 1) - currFrame.at<uchar>(i, j + 1);
 			d = prevFrame.at<uchar>(i + 1, j + 1) - currFrame.at<uchar>(i + 1, j + 1);
 			dt.at<double>(i, j) = (a + b + c + d) / 4;
-
-
 		}
 	}
-	blur(dt, dt, Size(3, 3));
-
-	//copyMakeBorder(dy, dx, 0, 0, 0, 1, BORDER_REPLICATE);
-	//copyMakeBorder(dx, dy, 0, 1, 0, 0, BORDER_REPLICATE);
+	//blur(dt, dt, Size(3, 3));
+	//blur(dx, dx, Size(2, 2));
+	//blur(dx, dx, Size(2, 2));
 
 	/*
 	normalize(dx, dx, 0, 255, NORM_MINMAX);
@@ -74,6 +61,25 @@ void calc_derivatives(Mat currFrame, Mat prevFrame, Mat &dx, Mat &dy, Mat &dt)
 	imshow("py", dy);
 	imshow("pt", dt);
 	*/
+}
+
+void on_trackbar(int, void*){}
+
+void createTrackbars(){
+	namedWindow("bar", 0);
+	char name[100];
+	sprintf(name, "RegionSize", REGION_SIZE);
+	sprintf(name, "MagFilter", MAGNITUDE_FILTER);
+	sprintf(name, "XY_SPLIT", XY_SPLIT);
+	sprintf(name, "XY_RATIO", XY_RATIO);
+	sprintf(name, "RectSize", RECT_SIZE);
+
+
+	createTrackbar("region_size", "bar", &REGION_SIZE, 50, on_trackbar);
+	createTrackbar("magnitude filte", "bar", &MAGNITUDE_FILTER, 30, on_trackbar);
+	createTrackbar("XY_SPLIT", "bar", &XY_SPLIT, 100, on_trackbar);
+	createTrackbar("XY_RATIO", "bar", &XY_RATIO, 10, on_trackbar);
+	createTrackbar("RECT_SIZE filte", "bar", &RECT_SIZE, REGION_SIZE*100, on_trackbar);
 }
 
 void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> velocities)
@@ -92,15 +98,15 @@ void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> veloc
 		Vec2d vel = velocities.at(i);
 		double Vx = vel(0);
 		double Vy = vel(1);
-		//sumX += vel(0);
-		//sumY += vel(1);
+		sumX += vel(0);
+		sumY += vel(1);
 
 		//velocity is atleast 4 either way, bigger the value more confident we are,
-		if (abs(Vx) > 8 && abs(Vx) / abs(Vy) > 1)  {
+		if (abs(Vx) > XY_SPLIT && abs(Vx) / abs(Vy) > XY_RATIO)  {
 			if (Vx > 0 ) 
-				rectangle(motionToRight, Rect(positions.at(i).x, positions.at(i).y, REGION_SIZE*5, REGION_SIZE*5), Scalar(255), CV_FILLED);
+				rectangle(motionToRight, Rect(positions.at(i).x, positions.at(i).y, RECT_SIZE, RECT_SIZE), Scalar(255), CV_FILLED);
 			else
-				rectangle(motionToLeft, Rect(positions.at(i).x, positions.at(i).y, REGION_SIZE*5, REGION_SIZE*5), Scalar(255), CV_FILLED);
+				rectangle(motionToLeft, Rect(positions.at(i).x, positions.at(i).y, RECT_SIZE, RECT_SIZE), Scalar(255), CV_FILLED);
 		}
 		
 			
@@ -137,8 +143,6 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 			xx_max = min(x + REGION_SIZE, frame.cols - 2);
 
 			//http://docs.opencv.org/modules/core/doc/basic_structures.html
-
-
 			//Mat A = Mat::zeros(2, 2, CV_32F);
 			//double A[2][2] = { { 0, 0 }, { 0, 0 } };
 			//double B[2] = { 0, 0 };
@@ -184,22 +188,19 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 			double Vx, Vy;
 			Vx = vel(0);//matV.at<double>(0, 0);
 			Vy = vel(1); //matV.at<double>(1, 0);	
-		
+			
+			//CALCULATE START AND END POINTS OF VECTORS
 			Point centre, vector, start;
 			centre.x = x+midshift;
 			centre.y = y+midshift;
-			vector.x = centre.x + (Vx > REGION_SIZE*3 ? REGION_SIZE*3 : Vx);
-			vector.y = centre.y + (Vy > REGION_SIZE*3 ? REGION_SIZE*3 : Vy);
+			vector.x = centre.x + (abs(Vx) > REGION_SIZE ? REGION_SIZE : Vx);
+			vector.y = centre.y + (abs(Vy) > REGION_SIZE ? REGION_SIZE : Vy);
 			start.x = x;
 			start.y = y;
 
-
-			double linelenght = sqrt((centre.x - vector.x) ^ 2 + (centre.y - vector.y) ^ 2);
-
 			double magnitude = sqrt(Vx*Vx + Vy*Vy);
-
 			//only add usefull vectors
-			if (magnitude > 2) 	{
+			if (magnitude > MAGNITUDE_FILTER) 	{
 				line(frame, centre, vector, Scalar(0, 255, 255), 1, CV_AA);
 				circle(frame, vector, 1, Scalar(255, 0, 0), 2);
 				positions.push_back(start);
@@ -222,13 +223,10 @@ int main(int argc, const char** argv)
 	if (argc > 1) cap.open(string(argv[1]));
 	else cap.open(CV_CAP_ANY);
 	if (!cap.isOpened()) printf("Error: could not load a camera or video.\n");
-
+	createTrackbars();
 	cap >> currentFrame;
 	cvtColor(currentFrame, currentFrame, CV_BGR2GRAY);
 	currentFrame.copyTo(previousFrame);
-	//previousFrame.convertTo(previousFrame, CV_32F);
-
-
 
 	//CREATE DX,DY,DT SO WE CAN CHECK SIZE LATER
 
@@ -246,13 +244,11 @@ int main(int argc, const char** argv)
 		//flip horizontally so it does not look inverted
 		flip(currentFrame, currentFrame, 1);
 		cvtColor(currentFrame, bwFrame, CV_BGR2GRAY);
-		//bwFrame.convertTo(bwFrame, CV_32F);
-
-
+		equalizeHist(bwFrame, bwFrame);
 
 		//COMPUTE DERIVATIVES
 		calc_derivatives(bwFrame, previousFrame, dx, dy, dt);
-		//COMPUTE LUCAS K ALGORITHM
+		//COMPUTE LUCAS K ALGORITHM & DISPLAY MOTION
 		LKTracker(dx, dy, dt, currentFrame);
 
 		bwFrame.copyTo(previousFrame);
