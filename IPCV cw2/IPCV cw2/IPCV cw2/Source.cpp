@@ -234,6 +234,7 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 					B[1] += dy.at<double>(jj, ii) * dt.at<double>(jj, ii);
 				}
 			}
+			A(1, 0) = A(0, 1);
 
 			//WHY IS MAT_X*VEC2D Sooooooooooo much faster then Mat*Mat???????
 			Vec2d vel = A.inv()*B;
