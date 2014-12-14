@@ -20,6 +20,14 @@ int timedown = 0;
 int vectormult = 1;
 
 
+int morph_elem = 0;
+int morph_size = RECT_SIZE;
+int morph_operator = 2;
+int const max_operator = 4;
+int const max_elem = 2;
+int const max_kernel_size = 100;
+
+
 
 
 void calc_derivatives(Mat currFrame, Mat prevFrame, Mat &dx, Mat &dy, Mat &dt)
@@ -27,7 +35,7 @@ void calc_derivatives(Mat currFrame, Mat prevFrame, Mat &dx, Mat &dy, Mat &dt)
 	dx.create(currFrame.rows - 1, currFrame.cols - 1, CV_64F);
 	dy.create(currFrame.rows - 1, currFrame.cols - 1, CV_64F);
 	dt.create(currFrame.rows - 1, currFrame.cols - 1, CV_64F);
-
+	
 	//CALC DERIVATIES
 	for (int i = 0; i < currFrame.rows - 1; i++) {
 		for (int j = 0; j < currFrame.cols - 1; j++) {
@@ -53,21 +61,18 @@ void calc_derivatives(Mat currFrame, Mat prevFrame, Mat &dx, Mat &dy, Mat &dt)
 			dt.at<double>(i, j) = (a + b + c + d) / 4;
 		}
 	}
-	//blur(dt, dt, Size(3, 3));
-	//blur(dx, dx, Size(2, 2));
-	//blur(dx, dx, Size(2, 2));
+	blur(dt, dt, Size(15, 15));
+	/*normalize(dx, dx, 0, 1, NORM_MINMAX);
+	normalize(dy, dy, 0, 1, NORM_MINMAX);
+	normalize(dt, dt, 0, 1, NORM_MINMAX);
+	
+	imshow("dx", dx);
+	imshow("dy", dy);
+	imshow("dt", dt);*/
 
-	/*
-	normalize(dx, dx, 0, 255, NORM_MINMAX);
-	normalize(dy, dy, 0, 255, NORM_MINMAX);
-	normalize(dt, dt, 0, 255, NORM_MINMAX);
-	imshow("px", dx);
-	imshow("py", dy);
-	imshow("pt", dt);
-	*/
 }
 
-void on_trackbar(int, void*){}
+void dump(int, void*){}
 
 void createTrackbars(){
 	namedWindow("bar", 0);
@@ -79,12 +84,25 @@ void createTrackbars(){
 	sprintf(name, "RectSize", RECT_SIZE);
 	sprintf(name, "vectormult", vectormult);
 
-	createTrackbar("region_size", "bar", &REGION_SIZE, 50, on_trackbar);
-	createTrackbar("magnitude filte", "bar", &MAGNITUDE_FILTER, 30, on_trackbar);
-	createTrackbar("XY_SPLIT", "bar", &XY_SPLIT, 100, on_trackbar);
-	createTrackbar("XY_RATIO", "bar", &XY_RATIO, 10, on_trackbar);
-	createTrackbar("RECT_SIZE", "bar", &RECT_SIZE, REGION_SIZE*100, on_trackbar);
-	createTrackbar("vectorsize", "bar", &vectormult, 15, on_trackbar);
+	createTrackbar("region_size", "bar", &REGION_SIZE, 60, dump);
+	createTrackbar("magnitude filte", "bar", &MAGNITUDE_FILTER, 30, dump);
+	createTrackbar("XY_SPLIT", "bar", &XY_SPLIT, 100, dump);
+	createTrackbar("XY_RATIO", "bar", &XY_RATIO, 10, dump);
+	createTrackbar("RECT_SIZE", "bar", &RECT_SIZE, REGION_SIZE * 100, dump);
+	createTrackbar("vectorsize", "bar", &vectormult, 15, dump);
+
+	/// Create Trackbar to select Morphology operation
+	createTrackbar("Operator:\n 0: Opening - 1: Closing \n 2: Gradient - 3: Top Hat \n 4: Black Hat", "bar", &morph_operator, max_operator, dump);
+
+	/// Create Trackbar to select kernel type
+	createTrackbar("Element:\n 0: Rect - 1: Cross - 2: Ellipse", "bar",
+		&morph_elem, max_elem,
+		dump);
+
+	/// Create Trackbar to choose kernel size
+	createTrackbar("Kernel size:\n 2n +1", "bar",
+		&morph_size, max_kernel_size,
+		dump);
 
 }
 
@@ -95,13 +113,13 @@ void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> veloc
 	Mat_<unsigned char> motionToRight(row, col, UCHAR_MAX + 1);
 	Mat_<unsigned char> motionDirection(row, col, UCHAR_MAX + 1);
 
-	
+
 
 	cout << velocities.size() << endl;
 	//normalize(vels, vels, 0, 1, NORM_MINMAX);
 	double sumX = 0;
 	double sumY = 0;
-	
+
 	for (int i = 0; i < velocities.size(); i++) {
 		Vec2d vel = velocities.at(i);
 		double Vx = vel(0);
@@ -111,13 +129,13 @@ void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> veloc
 
 		//velocity is atleast 4 either way, bigger the value more confident we are,
 		if (abs(Vx) > XY_SPLIT && abs(Vx) / abs(Vy) > XY_RATIO)  {
-			if (Vx > 0 ) 
-				rectangle(motionToRight, Rect(positions.at(i).x, positions.at(i).y, RECT_SIZE, RECT_SIZE), Scalar(255), CV_FILLED);
+			if (Vx > 0)
+				rectangle(motionToRight, Rect(positions.at(i).x - RECT_SIZE / 2, positions.at(i).y - RECT_SIZE / 2, RECT_SIZE, RECT_SIZE), Scalar(255), CV_FILLED);
 			else
-				rectangle(motionToLeft, Rect(positions.at(i).x, positions.at(i).y, RECT_SIZE, RECT_SIZE), Scalar(255), CV_FILLED);
+				rectangle(motionToLeft, Rect(positions.at(i).x - RECT_SIZE / 2, positions.at(i).y - RECT_SIZE / 2, RECT_SIZE, RECT_SIZE), Scalar(255), CV_FILLED);
 		}
-		
-			
+
+
 	}
 
 	if (abs(sumX)>XY_SPLIT && abs(sumX) / abs(sumY) >XY_RATIO){
@@ -135,10 +153,43 @@ void displayLRX(int row, int col, vector<Point2i> positions, vector<Vec2d> veloc
 
 	if (timedown == 0) {
 		imshow("Motion Directiobn", motionDirection);
-		timedown = 150;
+		timedown = 80;
 	}
+
+	blur(motionToLeft, motionToLeft, Size(15, 15));
+	blur(motionToRight, motionToRight, Size(15, 15));
 	imshow("left", motionToLeft);
 	imshow("right", motionToRight);
+
+	/// Apply the specified morphology operation to file gabs
+	int operation = morph_operator + 2;
+	Mat element = getStructuringElement(morph_elem, Size(2 * morph_size + 1, 2 * morph_size + 1), Point(morph_size, morph_size));
+	morphologyEx(motionToRight, motionToRight, operation, element);
+	morphologyEx(motionToLeft, motionToLeft, operation, element);
+	imshow("right_test", motionToRight);
+
+
+	Mat_<unsigned char> sumMotion(row, col, UCHAR_MAX + 1);
+
+	//sumMotion = motionToLeft + motionToRight;
+	vector<vector<Point> > contours;
+	vector<Vec4i> hierarchy;
+
+	//right motion
+	findContours(motionToRight, contours, CV_RETR_CCOMP, CV_CHAIN_APPROX_TC89_KCOS);
+	for (int i = 0; i< contours.size(); i++)
+	{
+		drawContours(frame, contours, i, Scalar(255, 0, 0), 5, 8, hierarchy, 0);
+	}
+	contours.clear();
+	hierarchy.clear();
+	//left motion
+	findContours(motionToLeft, contours, CV_RETR_CCOMP, CV_CHAIN_APPROX_TC89_KCOS);
+	for (int i = 0; i< contours.size(); i++)
+	{
+		drawContours(frame, contours, i, Scalar(0, 0, 255), 10, 1, hierarchy, 0);
+	}
+
 }
 
 void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
@@ -186,7 +237,7 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 
 			//WHY IS MAT_X*VEC2D Sooooooooooo much faster then Mat*Mat???????
 			Vec2d vel = A.inv()*B;
-		
+
 			/* //why is Matx*vec2d much much faster then Mat*Mat?
 			Mat AA = Mat(2, 2, CV_64F, A).inv();
 			Mat BB = Mat(2, 1, CV_64F, B);
@@ -199,11 +250,11 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 			double Vx, Vy;
 			Vx = vel(0);//matV.at<double>(0, 0);
 			Vy = vel(1); //matV.at<double>(1, 0);	
-			
+
 			//CALCULATE START AND END POINTS OF VECTORS
 			Point centre, vector, start;
-			centre.x = x+midshift;
-			centre.y = y+midshift;
+			centre.x = x + midshift;
+			centre.y = y + midshift;
 			vector.x = centre.x + (abs(Vx) > REGION_SIZE ? REGION_SIZE * vectormult : Vx * vectormult);
 			vector.y = centre.y + (abs(Vy) > REGION_SIZE ? REGION_SIZE * vectormult : Vy * vectormult);
 			start.x = x;
@@ -214,7 +265,7 @@ void LKTracker(Mat dx, Mat dy, Mat dt, Mat &frame)
 			if (magnitude > MAGNITUDE_FILTER) 	{
 				line(frame, centre, vector, Scalar(0, 255, 255), 1, CV_AA);
 				circle(frame, vector, 1, Scalar(255, 0, 0), 2);
-				positions.push_back(start);
+				positions.push_back(centre);
 				velocities.push_back(vel);
 			}
 
@@ -231,39 +282,43 @@ int main(int argc, const char** argv)
 	Mat currentFrame, bwFrame, previousFrame, dx, dy, dt;
 
 	//VIDEO CAPTURE
-    /* Make it possibe to choose other connected webcams */
-    long srcid = 0;
-    char *endptr;
+	/* Make it possibe to choose other connected webcams */
+	long srcid = 0;
+	char *endptr;
 	if (argc > 1) {
-        errno = 0;
-        srcid = strtol(argv[1],&endptr,10);
+		errno = 0;
+		srcid = strtol(argv[1], &endptr, 10);
 
-        if ((errno == ERANGE && (srcid == LONG_MAX || srcid == LONG_MIN))
-                || (errno != 0 && srcid == 0)) {
-            perror("strtol");
-            exit(EXIT_FAILURE);
-        }
-        if (endptr == argv[1]) {
-            cap.open(string(argv[1]));
-        } else {
-            cap.open(srcid);
-        }
-    } else {
-        cap.open(CV_CAP_ANY);
-    }
+		if ((errno == ERANGE && (srcid == LONG_MAX || srcid == LONG_MIN))
+			|| (errno != 0 && srcid == 0)) {
+			perror("strtol");
+			exit(EXIT_FAILURE);
+		}
+		if (endptr == argv[1]) {
+			cap.open(string(argv[1]));
+		}
+		else {
+			cap.open(srcid);
+		}
+	}
+	else {
+		cap.open(CV_CAP_ANY);
+	}
 	if (!cap.isOpened()) printf("Error: could not load a camera or video.\n");
 	createTrackbars();
 	cap >> currentFrame;
 	cvtColor(currentFrame, currentFrame, CV_BGR2GRAY);
 	currentFrame.copyTo(previousFrame);
 
-	//CREATE DX,DY,DT SO WE CAN CHECK SIZE LATER
+
+
+
 
 	//RUN LOOP
 	for (;;) {
 
 		//~60fps
-		waitKey(16);
+		waitKey(30);
 		//get frame from video capture
 		cap >> currentFrame;
 		if (timedown > 0) {
@@ -279,6 +334,7 @@ int main(int argc, const char** argv)
 		flip(currentFrame, currentFrame, 1);
 		cvtColor(currentFrame, bwFrame, CV_BGR2GRAY);
 		equalizeHist(bwFrame, bwFrame);
+		imshow("bframe", bwFrame);
 
 		//COMPUTE DERIVATIVES
 		calc_derivatives(bwFrame, previousFrame, dx, dy, dt);
