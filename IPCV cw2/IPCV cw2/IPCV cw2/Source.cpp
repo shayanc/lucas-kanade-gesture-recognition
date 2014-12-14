@@ -1,9 +1,10 @@
-#include <opencv\highgui.h>
-#include <opencv\cv.h>
+#include <opencv/highgui.h>
+#include <opencv/cv.h>
 #include <numeric>
 
 #include <iostream>
 #include <stdio.h>
+#include <errno.h>
 
 using namespace std;
 using namespace cv;
@@ -230,8 +231,26 @@ int main(int argc, const char** argv)
 	Mat currentFrame, bwFrame, previousFrame, dx, dy, dt;
 
 	//VIDEO CAPTURE
-	if (argc > 1) cap.open(string(argv[1]));
-	else cap.open(CV_CAP_ANY);
+    /* Make it possibe to choose other connected webcams */
+    long srcid = 0;
+    char *endptr;
+	if (argc > 1) {
+        errno = 0;
+        srcid = strtol(argv[1],&endptr,10);
+
+        if ((errno == ERANGE && (srcid == LONG_MAX || srcid == LONG_MIN))
+                || (errno != 0 && srcid == 0)) {
+            perror("strtol");
+            exit(EXIT_FAILURE);
+        }
+        if (endptr == argv[1]) {
+            cap.open(string(argv[1]));
+        } else {
+            cap.open(srcid);
+        }
+    } else {
+        cap.open(CV_CAP_ANY);
+    }
 	if (!cap.isOpened()) printf("Error: could not load a camera or video.\n");
 	createTrackbars();
 	cap >> currentFrame;
